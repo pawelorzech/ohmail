@@ -27,7 +27,7 @@ export {
 export type { DraftUserPayload } from "../draft-prompt.js";
 
 export interface SonnetDrafterOpts {
-  model?: string;                                        // default "claude-sonnet-5"
+  model?: string;                                        // default "claude-sonnet-5-5"
   /**
    * EU inference residency (spec §8). Plumbed and unset: the plan we are on does
    * not offer it yet. COMMERCIAL TRACK (decision 30, non-blocking) — set this to
@@ -40,7 +40,7 @@ export interface SonnetDrafterOpts {
   maxTokens?: number;
 }
 
-const DEFAULT_MODEL = "claude-sonnet-5";
+const DEFAULT_MODEL = "claude-sonnet-5-5";
 
 /**
  * Build the exact `messages.create` params for one draft call: cached voice/policy
@@ -59,16 +59,20 @@ export function buildDraftParams(input: DraftInput, opts: SonnetDrafterOpts = {}
     model: opts.model ?? DEFAULT_MODEL,
     max_tokens: opts.maxTokens ?? 1024,
     /**
-     * Thinking OFF — a billing decision before a quality one. `claude-sonnet-5` runs adaptive
-     * thinking by default, and `max_tokens` caps thinking plus response TOGETHER. Measured live:
+     * Thinking OFF — a billing decision before a quality one. Sonnet runs adaptive thinking by
+     * default, and `max_tokens` caps thinking plus response TOGETHER. Measured live on Sonnet 5:
      * an ordinary business reply came back 259 thinking + 539 text of 1024, so a longer reply
      * silently loses its ending — a truncated draft the customer paid for. And every thinking
      * token is margin whose count is the model's decision — unpriceable until `onUsage` produces
      * real numbers. Deterministic first, tuned second: keeping thinking and raising `max_tokens`
-     * is deferred to a re-pricing decision made WITH measurements. Accepted on Sonnet 5 at any
-     * effort.
+     * is deferred to a re-pricing decision made WITH measurements.
+     *
+     * On Sonnet 5.5 `{ type: "disabled" }` is a 400; `between_tools` is its thinking-off mode,
+     * legal at effort `high` or below (the default, which this file keeps) and with no other field
+     * beside `type`. Only Sonnet 5.5 accepts it — an `opts.model` naming another model must send
+     * `disabled` instead, or the API answers 400.
      */
-    thinking: { type: "disabled" },
+    thinking: { type: "between_tools" },
     system: [
       { type: "text", text: DRAFT_PREFIX, cache_control: { type: "ephemeral" } },
     ],

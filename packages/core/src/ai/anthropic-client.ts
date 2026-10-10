@@ -39,7 +39,8 @@ const DEFAULT_BACKOFF_MS = 500;
 const MAX_RETRY_AFTER_MS = 20_000;
 
 /**
- * Published list prices, USD per million tokens, as of 2026-09-28.
+ * Published list prices, USD per million tokens, as of 2026-10-11. Haiku 5.5's row is its
+ * price for prompts up to 100K tokens (classify and screening prompts are far below that).
  *
  * Hard-coded deliberately and narrowly: the alternative is that per-action cost is unknowable at
  * the moment of spend, which is the state this table exists to end. A model absent from this
@@ -51,6 +52,9 @@ export const MODEL_PRICES_USD_PER_MTOK: Readonly<Record<string, { input: number;
   "claude-haiku-4-5-20251001": { input: 1, output: 5 },
   "claude-sonnet-5": { input: 2, output: 10 },
   "claude-opus-5": { input: 5, output: 25 },
+  "claude-haiku-5-5": { input: 0.1, output: 0.5 },
+  "claude-sonnet-5-5": { input: 2, output: 10 },
+  "claude-opus-5-5": { input: 4, output: 20 },
 };
 
 /** Cache reads bill at ~0.1× input; cache writes at ~1.25× input (5-minute TTL). */

@@ -46,7 +46,7 @@ export interface AnthropicLike {
 
 export interface HaikuClassifierOpts {
   client: AnthropicLike;                                 // real: new Anthropic(); test: fake returning canned JSON
-  model?: string;                                        // default "claude-haiku-4-5-20251001"
+  model?: string;                                        // default "claude-haiku-5-5"
   /**
    * EU inference residency (spec §8). Plumbed and unset: the plan we are on does
    * not offer it yet. COMMERCIAL TRACK (decision 30, non-blocking) — set this to
@@ -60,14 +60,13 @@ export interface HaikuClassifierOpts {
 }
 
 /**
- * Pinned to the DATED id rather than the `claude-haiku-4-5` alias. Classify runs once per
- * message and is the cost-dominant AI call in the product, so the model behind it is a
- * billing input as much as a quality one: an alias that silently rolls to a new snapshot
- * moves both, and the first evidence would be a margin change nobody could attribute.
- * `draft.ts` keeps the `claude-sonnet-5` alias deliberately — it runs on human request, not
- * per message, so freshness is worth more there than reproducibility.
+ * Classify runs once per message and is the cost-dominant AI call in the product, so the model
+ * behind it is a billing input as much as a quality one. Haiku 5.5 ships one id and no dated
+ * snapshot, so the dated-vs-alias choice the 4.5 pin made no longer exists: the id is the
+ * pin. A model move is a price move — `MODEL_PRICES_USD_PER_MTOK` carries its row, so a
+ * margin change is attributable the day it happens.
  */
-const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+const DEFAULT_MODEL = "claude-haiku-5-5";
 
 /**
  * Build the exact `messages.create` params for one classify call: cached taxonomy
@@ -85,6 +84,14 @@ export function buildClassifyParams(input: ClassifierInput, opts: HaikuClassifie
   const params: Record<string, unknown> = {
     model: opts.model ?? DEFAULT_MODEL,
     max_tokens: opts.maxTokens ?? 512,
+    /**
+     * Thinking OFF. Haiku 5.5 thinks by default, and `max_tokens` caps thinking plus the JSON
+     * TOGETHER — at 512 a thinking pass can eat the budget before the verdict is written, a
+     * truncated classification on the per-message path. `disabled` is legal on Haiku 5.5 at
+     * effort `high` or below; this file sets no effort (default `medium`), so it is legal — an
+     * `xhigh`/`max` effort added here must remove this line, or the API answers 400.
+     */
+    thinking: { type: "disabled" },
     system: [
       { type: "text", text: TAXONOMY_PREFIX, cache_control: { type: "ephemeral" } },
     ],
@@ -127,6 +134,7 @@ export function buildScreeningParams(input: ClassifierInput, opts: HaikuClassifi
   const params: Record<string, unknown> = {
     model: opts.model ?? DEFAULT_MODEL,
     max_tokens: opts.maxTokens ?? 512,
+    thinking: { type: "disabled" },                      // see `buildClassifyParams`
     system: [
       { type: "text", text: SCREENING_PREFIX, cache_control: { type: "ephemeral" } },
     ],

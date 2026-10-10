@@ -47,7 +47,7 @@ export interface WorkflowPort {                          // injected into the pr
 }
 
 export interface OpusProposerOpts {
-  model?: string;                                        // default "claude-opus-5"
+  model?: string;                                        // default "claude-opus-5-5"
   /**
    * EU inference residency. Plumbed and unset: the API plan in use does not
    * offer it yet — set this to
@@ -64,11 +64,11 @@ export interface OpusProposerOpts {
  * `claude-opus-4-8` was never a real model id — no such model has shipped. It sat as the default
  * for the whole build, invisibly: nothing calls the proposer with a live client yet, so the only
  * reader was a test asserting it equalled itself, and the first real propose call would have been
- * a flat API error. Pinned to the released Opus 5: proposal runs are rare, batched, and read a
+ * a flat API error. Pinned to the released Opus 5.5: proposal runs are rare, batched, and read a
  * whole pattern set at once, so the strongest model is the right trade — unlike classify, which
  * runs per message and is cost-dominant.
  */
-const DEFAULT_MODEL = "claude-opus-5";
+const DEFAULT_MODEL = "claude-opus-5-5";
 
 /**
  * The FIXED task/policy prefix. Stable across every propose call so it can be cached
@@ -164,18 +164,18 @@ export function buildProposeParams(patterns: WorkflowPattern[], opts: OpusPropos
   const userPayload = { patterns };
   const params: Record<string, unknown> = {
     model: opts.model ?? DEFAULT_MODEL,
-    max_tokens: opts.maxTokens ?? 2048,
     /**
-     * Thinking OFF — `draft.ts`'s decision, and both reasons are sharper here. `claude-opus-5`
-     * runs adaptive thinking by default and is the most expensive model this product calls; one
-     * proposal pass costs one credit whatever it spends, and the pass is cron-driven — an
-     * unbounded per-call token spend multiplied by every account is the one cost with no natural
-     * ceiling. `max_tokens: 2048` is also the tightest budget of the three ports, the most likely
-     * to be eaten by thinking and truncate a proposal list mid-array. `disabled` is accepted on
-     * Opus 5 only at effort `high` or below; this file sets no effort, so it is legal — an
-     * `xhigh`/`max` effort added here must remove this line, or the API answers 400.
+     * Thinking as LOW as it goes — `draft.ts`'s decision, as far as this model allows. Opus is the
+     * most expensive model this product calls; one proposal pass costs one credit whatever it
+     * spends, and the pass is cron-driven — an unbounded per-call token spend multiplied by every
+     * account is the one cost with no natural ceiling. But Opus 5.5 cannot turn thinking off:
+     * `{ type: "disabled" }` is a 400 at every effort, so there is no `thinking` field here and
+     * effort is the only lever. Its default is `medium`, so `low` is set explicitly in
+     * `output_config` below. Thinking still shares `max_tokens` with the proposal list, so the
+     * budget is 8192 rather than Opus 5's 2048 — enough that thinking cannot truncate the JSON
+     * array mid-list.
      */
-    thinking: { type: "disabled" },
+    max_tokens: opts.maxTokens ?? 8192,
     system: [
       { type: "text", text: PROPOSE_PREFIX, cache_control: { type: "ephemeral" } },
     ],
@@ -183,6 +183,7 @@ export function buildProposeParams(patterns: WorkflowPattern[], opts: OpusPropos
       { role: "user", content: JSON.stringify(userPayload) },
     ],
     output_config: {
+      effort: "low",
       format: { type: "json_schema", schema: RESULT_SCHEMA },
     },
   };
